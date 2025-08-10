@@ -192,16 +192,6 @@ export class CreatureEntity {
   }
 
   /**
-   * Take damage and potentially die
-   */
-  public takeDamage(damage: number): void {
-    this.energy -= damage
-    if (this.energy <= 0) {
-      this.isAlive = false
-    }
-  }
-
-  /**
    * Cast vision rays and return vision data with object type detection
    */
   public castVision(obstacles: Rectangle[], otherCreatures: Rectangle[] = []): VisionData {
@@ -220,6 +210,7 @@ export class CreatureEntity {
    * Process vision input and run neural network to determine next action
    */
   public run(obstacles: Rectangle[], otherCreatures: Rectangle[] = [], fitnessConfig?: {
+    killReward: number,
     forwardMovementReward: number,
     survivalReward: number,
     collisionPenalty: number,
@@ -302,6 +293,7 @@ export class CreatureEntity {
   }
 
   private updateFitness(forwardSpeed: number, collisions: number, fitnessConfig?: {
+    killReward: number,
     forwardMovementReward: number,
     survivalReward: number,
     collisionPenalty: number,
@@ -309,6 +301,7 @@ export class CreatureEntity {
   }): void {
     // Use default values if no config provided (backwards compatibility)
     const config = fitnessConfig || {
+      killReward: 10.0,
       forwardMovementReward: 0.1,
       survivalReward: 0.01,
       collisionPenalty: 0.05,
@@ -326,6 +319,20 @@ export class CreatureEntity {
     
     // Small penalty for existing (encourages efficiency)
     this.fitness -= config.efficiencyPenalty
+  }
+
+  /**
+   * Apply damage to creature and handle death
+   */
+  public takeDamage(damage: number): { died: boolean, killerId?: string } {
+    this.energy -= damage
+    
+    if (this.energy <= 0 && this.isAlive) {
+      this.isAlive = false
+      return { died: true }
+    }
+    
+    return { died: false }
   }
 
   /**

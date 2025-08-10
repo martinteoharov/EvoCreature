@@ -273,6 +273,7 @@ interface PixiCanvasProps {
   onCanvasDimensionsUpdate?: (width: number, height: number) => void
   selectedCreatureId?: string | null
   fitnessConfig?: {
+    killReward: number
     forwardMovementReward: number
     survivalReward: number
     collisionPenalty: number
@@ -512,7 +513,16 @@ export default function PixiCanvas({
           // Check creature collisions
           for (const creature of updatedCreatures) {
             if (checkProjectileCreatureCollision(projectile, creature)) {
-              creature.takeDamage(projectile.damage)
+              const damageResult = creature.takeDamage(projectile.damage)
+              
+              // Award kill reward to the shooter if target died
+              if (damageResult.died && projectile.ownerId) {
+                const shooter = updatedCreatures.find(c => c.id === projectile.ownerId)
+                if (shooter && fitnessConfig?.killReward) {
+                  shooter.fitness += fitnessConfig.killReward
+                }
+              }
+              
               return false // Remove projectile after hit
             }
           }

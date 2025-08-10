@@ -20,12 +20,14 @@ export default function Home() {
   const [generationEnded, setGenerationEnded] = useState(false)
   const [topPerformers, setTopPerformers] = useState<CreatureEntity[]>([])
   const [autoEvolve, setAutoEvolve] = useState(false)
+  const [isAutoEvolving, setIsAutoEvolving] = useState(false)
   const [simulationSpeed, setSimulationSpeed] = useState(1)
   const [canvasWidth, setCanvasWidth] = useState(800)
   const [canvasHeight, setCanvasHeight] = useState(600)
   
   // Fitness configuration
   const [fitnessConfig, setFitnessConfig] = useState({
+    killReward: 10.0, // Highest reward for eliminating other creatures
     forwardMovementReward: 0.1,
     survivalReward: 0.01,
     collisionPenalty: 0.05,
@@ -73,9 +75,24 @@ export default function Home() {
     setGenerationEnded(true)
     setTopPerformers(topPerformersList)
     
-    if (autoEvolve) {
-      // Jump straight into next generation without delay
-      handleNextGenerationAndRun()
+    if (autoEvolve && !isAutoEvolving && activeSimulation) {
+      setIsAutoEvolving(true)
+      
+      // Complete the current simulation and start the next one
+      const fitnessUpdates: Record<string, number> = {}
+      topPerformersList.forEach(creature => {
+        fitnessUpdates[creature.id] = creature.fitness
+      })
+      
+      // Complete simulation first
+      completeSimulation(activeSimulation.id, fitnessUpdates)
+      
+      // Then start the next one after a short delay
+      setTimeout(() => {
+        setGenerationEnded(false)
+        startSimulation(currentArena, canvasWidth, canvasHeight)
+        setIsAutoEvolving(false)
+      }, 100)
     }
   }
 
@@ -96,13 +113,15 @@ export default function Home() {
       topPerformers.forEach(creature => {
         fitnessUpdates[creature.id] = creature.fitness
       })
+      
       completeSimulation(activeSimulation.id, fitnessUpdates)
       setGenerationEnded(false)
       
       // Immediately start a new simulation for the next generation
       setTimeout(() => {
         startSimulation(currentArena, canvasWidth, canvasHeight)
-      }, 100) // Small delay to ensure state updates are processed
+        setIsAutoEvolving(false)
+      }, 100)
     }
   }
 
@@ -220,12 +239,12 @@ export default function Home() {
                    <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
                    <span className="text-sm text-yellow-400">Generation Complete</span>
                  </div>
-                 <button
-                   onClick={handleNextGenerationAndRun}
-                   className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded transition-colors"
-                 >
-                   Next Generation & Run
-                 </button>
+                                 <button
+                  onClick={handleNextGenerationAndRun}
+                  className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded transition-colors"
+                >
+                  Next Generation & Run
+                </button>
                  <button
                    onClick={handleNextGeneration}
                    className="w-full px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white text-sm rounded transition-colors"
@@ -250,9 +269,20 @@ export default function Home() {
 
             {/* Auto Evolve Toggle */}
             <div className="flex items-center justify-between">
-              <span className="text-sm text-white">Auto Evolve</span>
+              <div className="flex items-center space-x-2">
+                <span className="text-sm text-white">Auto Evolve</span>
+                {isAutoEvolving && (
+                  <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" title="Auto evolving..."></div>
+                )}
+              </div>
               <button
-                onClick={() => setAutoEvolve(!autoEvolve)}
+                onClick={() => {
+                  setAutoEvolve(!autoEvolve)
+                  if (autoEvolve) {
+                    // If turning off auto evolve, also reset the auto evolving flag
+                    setIsAutoEvolving(false)
+                  }
+                }}
                 className={`w-12 h-6 rounded-full transition-colors ${
                   autoEvolve ? 'bg-green-600' : 'bg-gray-600'
                 }`}
@@ -293,6 +323,20 @@ export default function Home() {
               <h4 className="text-sm font-semibold text-white">Fitness Configuration</h4>
               
               <div className="space-y-3">
+                <div className="space-y-1">
+                  <label className="block text-xs text-gray-300">Kill Reward (Highest)</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    max="100"
+                    value={fitnessConfig.killReward}
+                    onChange={(e) => handleFitnessConfigChange('killReward', parseFloat(e.target.value) || 0)}
+                    className="w-full px-2 py-1 bg-gray-800 border border-gray-600 rounded text-xs text-white"
+                    disabled={!!activeSimulation}
+                  />
+                </div>
+
                 <div className="space-y-1">
                   <label className="block text-xs text-gray-300">Forward Movement Reward</label>
                   <input
