@@ -24,8 +24,6 @@ export default function Home() {
   const [speedMode, setSpeedMode] = useState(false)
   const [speedGenerationsLeft, setSpeedGenerationsLeft] = useState(0)
   const [simulationSpeed, setSimulationSpeed] = useState(1)
-  const [canvasWidth, setCanvasWidth] = useState(800)
-  const [canvasHeight, setCanvasHeight] = useState(600)
   const {
     topCreatures,
     pinnedCreatures,
@@ -47,7 +45,7 @@ export default function Home() {
       setGenerationEnded(false)
       setTopPerformers([])
       setSurvivors([])
-      startSimulation(currentArena, canvasWidth, canvasHeight)
+      startSimulation(currentArena)
     }
   }
 
@@ -60,11 +58,6 @@ export default function Home() {
       completeSimulation(activeSimulation.id, fitnessUpdates)
       setGenerationEnded(false)
     }
-  }
-
-  const handleCanvasDimensionsUpdate = (width: number, height: number) => {
-    setCanvasWidth(width)
-    setCanvasHeight(height)
   }
 
   const handleGenerationEnd = (survivorsList: CreatureEntity[], topPerformersList: CreatureEntity[]) => {
@@ -82,7 +75,7 @@ export default function Home() {
     
     if (autoEvolve) {
       setTimeout(() => {
-        handleNextGenerationAndRun()
+        handleNextGeneration()
       }, speedMode ? 100 : 1000)
     }
   }
@@ -95,22 +88,6 @@ export default function Home() {
       })
       completeSimulation(activeSimulation.id, fitnessUpdates)
       setGenerationEnded(false)
-    }
-  }
-
-  const handleNextGenerationAndRun = () => {
-    if (activeSimulation && generationEnded) {
-      const fitnessUpdates: Record<string, number> = {}
-      topPerformers.forEach(creature => {
-        fitnessUpdates[creature.id] = creature.fitness
-      })
-      completeSimulation(activeSimulation.id, fitnessUpdates)
-      setGenerationEnded(false)
-      
-      // Immediately start a new simulation for the next generation
-      setTimeout(() => {
-        startSimulation(currentArena, canvasWidth, canvasHeight)
-      }, 100) // Small delay to ensure state updates are processed
     }
   }
 
@@ -152,20 +129,13 @@ export default function Home() {
           }}
           onCreatureSelect={setSelectedCreatureId}
           onGenerationEnd={handleGenerationEnd}
-          onCanvasDimensionsUpdate={handleCanvasDimensionsUpdate}
           selectedCreatureId={selectedCreatureId}
         />
         
         {/* Arena Info Overlay */}
-        <div className="absolute top-4 left-4 surface rounded-lg px-4 py-3 border-l-4" style={{ borderLeftColor: currentArenaInfo?.color }}>
-          <h3 className="font-semibold text-white mb-1 flex items-center">
-            <div 
-              className="w-2 h-2 rounded-full mr-2"
-              style={{ backgroundColor: currentArenaInfo?.color }}
-            />
-            {currentArenaInfo?.name}
-          </h3>
-          <p className="text-xs text-muted mb-1">
+        <div className="absolute top-4 left-4 surface rounded-lg px-4 py-2">
+          <h3 className="font-semibold text-white mb-1">{currentArenaInfo?.name}</h3>
+          <p className="text-xs text-muted">
             Population: {currentPopulation.length}/50
           </p>
           {activeSimulation && (
@@ -222,25 +192,19 @@ export default function Home() {
               >
                 Start Evolution
               </button>
-                         ) : generationEnded ? (
-               <div className="space-y-2">
-                 <div className="flex items-center space-x-2 px-3 py-2 bg-yellow-900/50 rounded">
-                   <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
-                   <span className="text-sm text-yellow-400">Generation Complete</span>
-                 </div>
-                 <button
-                   onClick={handleNextGenerationAndRun}
-                   className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded transition-colors"
-                 >
-                   Next Generation & Run
-                 </button>
-                 <button
-                   onClick={handleNextGeneration}
-                   className="w-full px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white text-sm rounded transition-colors"
-                 >
-                   Next Generation Only
-                 </button>
-               </div>
+            ) : generationEnded ? (
+              <div className="space-y-2">
+                <div className="flex items-center space-x-2 px-3 py-2 bg-yellow-900/50 rounded">
+                  <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
+                  <span className="text-sm text-yellow-400">Generation Complete</span>
+                </div>
+                <button
+                  onClick={handleNextGeneration}
+                  className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded transition-colors"
+                >
+                  Next Generation
+                </button>
+              </div>
             ) : (
               <div className="space-y-2">
                 <div className="flex items-center space-x-2 px-3 py-2 bg-green-900/50 rounded">
@@ -325,22 +289,17 @@ export default function Home() {
                     selectedCreatureId === creature.id ? null : creature.id
                   )}
                 >
-                                     <div className="flex items-center justify-between mb-2">
-                     <div className="flex items-center space-x-2 flex-1 min-w-0">
-                       <h4 className="font-medium text-white truncate text-sm" title={creature.name}>
-                         {creature.name.split('-')[0]}
-                       </h4>
-                       {creature.isPinned && (
-                         <span className="text-xs px-2 py-0.5 bg-yellow-600 text-yellow-100 rounded" title="Pinned">
-                           PINNED
-                         </span>
-                       )}
-                       {creature.isSaved && (
-                         <span className="text-xs px-2 py-0.5 bg-green-600 text-green-100 rounded" title="Saved Creature">
-                           SAVED
-                         </span>
-                       )}
-                     </div>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center space-x-2 flex-1 min-w-0">
+                      <h4 className="font-medium text-white truncate text-sm">
+                        {creature.name}
+                      </h4>
+                      {creature.isPinned && (
+                        <div className="w-3 h-3 text-yellow-400" title="Pinned">
+                          📌
+                        </div>
+                      )}
+                    </div>
                     <div className="flex items-center space-x-2">
                       <button
                         onClick={(e) => {
@@ -353,12 +312,12 @@ export default function Home() {
                         }}
                         className={`text-xs px-2 py-1 rounded transition-colors ${
                           creature.isSaved 
-                            ? 'bg-red-600 hover:bg-red-700 text-red-100' 
-                            : 'bg-green-600 hover:bg-green-700 text-green-100'
+                            ? 'bg-green-600 hover:bg-green-700 text-green-100' 
+                            : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
                         }`}
                         title={creature.isSaved ? 'Unsave creature' : 'Save creature'}
                       >
-                        {creature.isSaved ? 'UNSAVE' : 'SAVE'}
+                        {creature.isSaved ? '💾' : '💿'}
                       </button>
                       <span className="text-xs px-2 py-1 rounded-full bg-gray-700 text-gray-300">
                         Gen {creature.generation}
@@ -366,20 +325,14 @@ export default function Home() {
                     </div>
                   </div>
                   
-                                     <div className="mb-1">
-                     <span className="text-xs text-gray-400 font-mono">
-                       #{creature.name.split('-')[1]}
-                     </span>
-                   </div>
-                   
-                   <div className="flex items-center justify-between text-sm">
-                     <span className="text-muted">
-                       Fitness: <span className="accent-text font-medium">{creature.fitness.toFixed(2)}</span>
-                     </span>
-                     <span className="text-xs text-muted">
-                       {creature.isAlive ? 'Alive' : 'Dead'}
-                     </span>
-                   </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted">
+                      Fitness: <span className="accent-text font-medium">{creature.fitness.toFixed(2)}</span>
+                    </span>
+                    <span className="text-xs text-muted">
+                      {creature.isAlive ? 'Alive' : 'Dead'}
+                    </span>
+                  </div>
                 </div>
               ))
             )}
