@@ -140,11 +140,8 @@ export class Genome {
     const genes2 = parent2.data.genes
     const newGenes: number[] = []
 
-    // Single-point crossover or uniform crossover
-    const crossoverPoint = Math.floor(Math.random() * genes1.length)
-    
+    // Uniform crossover (50% chance from each parent)
     for (let i = 0; i < genes1.length; i++) {
-      // Use uniform crossover (50% chance from each parent)
       newGenes.push(Math.random() < 0.5 ? genes1[i] : genes2[i])
     }
 

@@ -19,7 +19,6 @@ export default function Home() {
   const [selectedCreatureId, setSelectedCreatureId] = useState<string | null>(null)
   const [generationEnded, setGenerationEnded] = useState(false)
   const [topPerformers, setTopPerformers] = useState<CreatureEntity[]>([])
-  const [survivors, setSurvivors] = useState<CreatureEntity[]>([])
   const [autoEvolve, setAutoEvolve] = useState(false)
   const [simulationSpeed, setSimulationSpeed] = useState(1)
   const [canvasWidth, setCanvasWidth] = useState(800)
@@ -33,8 +32,6 @@ export default function Home() {
     efficiencyPenalty: 0.001
   })
   const {
-    topCreatures,
-    pinnedCreatures,
     savedCreatures,
     currentPopulation,
     activeSimulation,
@@ -52,7 +49,6 @@ export default function Home() {
     if (!activeSimulation) {
       setGenerationEnded(false)
       setTopPerformers([])
-      setSurvivors([])
       startSimulation(currentArena, canvasWidth, canvasHeight)
     }
   }
@@ -73,9 +69,8 @@ export default function Home() {
     setCanvasHeight(height)
   }
 
-  const handleGenerationEnd = (survivorsList: CreatureEntity[], topPerformersList: CreatureEntity[]) => {
+  const handleGenerationEnd = (_survivorsList: CreatureEntity[], topPerformersList: CreatureEntity[]) => {
     setGenerationEnded(true)
-    setSurvivors(survivorsList)
     setTopPerformers(topPerformersList)
     
     if (autoEvolve) {

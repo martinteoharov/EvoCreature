@@ -1,5 +1,5 @@
 import { Brain, BrainConfig } from './Brain'
-import { Genome, GenomeData } from './Genome'
+import { Genome } from './Genome'
 import { VisionSystem, VisionData, createDefaultVisionSystem } from './Vision'
 
 export interface Vector2D {

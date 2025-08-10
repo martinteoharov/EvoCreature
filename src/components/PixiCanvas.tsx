@@ -56,7 +56,7 @@ const createCreatureGraphics = (
   
   // Adjust colors based on state
   let bodyColor = creature.isSaved ? 0x059669 : (creature.isPinned ? 0x4a5568 : 0x1f1f1f)
-  let strokeColor = creature.isSaved ? 0x10b981 : (creature.isPinned ? 0xfbbf24 : 0x22c55e)
+  const strokeColor = creature.isSaved ? 0x10b981 : (creature.isPinned ? 0xfbbf24 : 0x22c55e)
   let strokeWidth = creature.isSaved ? 2 : (creature.isPinned ? 2 : 1.5)
   
   // Apply hover/selection effects
@@ -132,7 +132,7 @@ const createCreatureGraphics = (
 
 
 // Create visual graphics for a projectile
-function createProjectileGraphics(projectile: Projectile): PIXI.Graphics {
+function createProjectileGraphics(_projectile: Projectile): PIXI.Graphics {
   const graphics = new PIXI.Graphics()
   graphics
     .circle(0, 0, 3) // Small circle for projectile
@@ -638,7 +638,7 @@ export default function PixiCanvas({
         isDestroying.current = false
       }
     }
-  }, [canvasWidth, canvasHeight, arena, isSimulationActive, simulationSpeed, onCreatureUpdate, onCanvasDimensionsUpdate])
+  }, [canvasWidth, canvasHeight, arena, isSimulationActive, simulationSpeed, onCreatureUpdate, onCanvasDimensionsUpdate, fitnessConfig, onCreatureSelect, onGenerationEnd, selectedCreatureId])
 
   return (
     <div 
