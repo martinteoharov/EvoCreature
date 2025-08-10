@@ -272,6 +272,12 @@ interface PixiCanvasProps {
   onGenerationEnd?: (survivors: CreatureEntity[], topPerformers: CreatureEntity[]) => void
   onCanvasDimensionsUpdate?: (width: number, height: number) => void
   selectedCreatureId?: string | null
+  fitnessConfig?: {
+    forwardMovementReward: number
+    survivalReward: number
+    collisionPenalty: number
+    efficiencyPenalty: number
+  }
 }
 
 export default function PixiCanvas({ 
@@ -285,7 +291,8 @@ export default function PixiCanvas({
   onCreatureSelect,
   onGenerationEnd,
   onCanvasDimensionsUpdate,
-  selectedCreatureId
+  selectedCreatureId,
+  fitnessConfig
 }: PixiCanvasProps) {
   const pixiContainer = useRef<HTMLDivElement>(null)
   const app = useRef<PIXI.Application | null>(null)
@@ -419,7 +426,7 @@ export default function PixiCanvas({
             .map(c => c.getBoundingRect())
 
           // Run creature AI with vision system
-          const aiResult = creature.run(allObstacles, otherCreatureRects)
+          const aiResult = creature.run(allObstacles, otherCreatureRects, fitnessConfig)
 
           // Handle shooting
           if (aiResult.shouldShoot) {

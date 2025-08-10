@@ -24,6 +24,14 @@ export default function Home() {
   const [simulationSpeed, setSimulationSpeed] = useState(1)
   const [canvasWidth, setCanvasWidth] = useState(800)
   const [canvasHeight, setCanvasHeight] = useState(600)
+  
+  // Fitness configuration
+  const [fitnessConfig, setFitnessConfig] = useState({
+    forwardMovementReward: 0.1,
+    survivalReward: 0.01,
+    collisionPenalty: 0.05,
+    efficiencyPenalty: 0.001
+  })
   const {
     topCreatures,
     pinnedCreatures,
@@ -107,6 +115,13 @@ export default function Home() {
     setSimulationSpeed(newSpeed)
   }
 
+  const handleFitnessConfigChange = (key: keyof typeof fitnessConfig, value: number) => {
+    setFitnessConfig(prev => ({
+      ...prev,
+      [key]: value
+    }))
+  }
+
   const currentArenaInfo = ARENAS.find(a => a.id === currentArena)
 
   return (
@@ -135,6 +150,7 @@ export default function Home() {
           onGenerationEnd={handleGenerationEnd}
           onCanvasDimensionsUpdate={handleCanvasDimensionsUpdate}
           selectedCreatureId={selectedCreatureId}
+          fitnessConfig={fitnessConfig}
         />
         
         {/* Arena Info Overlay */}
@@ -274,6 +290,69 @@ export default function Home() {
                 <span>3x</span>
                 <span>4x</span>
                 <span>5x</span>
+              </div>
+            </div>
+
+            {/* Fitness Configuration */}
+            <div className="space-y-3">
+              <h4 className="text-sm font-semibold text-white">Fitness Configuration</h4>
+              
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <label className="block text-xs text-gray-300">Forward Movement Reward</label>
+                  <input
+                    type="number"
+                    step="0.001"
+                    min="0"
+                    max="1"
+                    value={fitnessConfig.forwardMovementReward}
+                    onChange={(e) => handleFitnessConfigChange('forwardMovementReward', parseFloat(e.target.value) || 0)}
+                    className="w-full px-2 py-1 bg-gray-800 border border-gray-600 rounded text-xs text-white"
+                    disabled={!!activeSimulation}
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="block text-xs text-gray-300">Survival Reward</label>
+                  <input
+                    type="number"
+                    step="0.001"
+                    min="0"
+                    max="1"
+                    value={fitnessConfig.survivalReward}
+                    onChange={(e) => handleFitnessConfigChange('survivalReward', parseFloat(e.target.value) || 0)}
+                    className="w-full px-2 py-1 bg-gray-800 border border-gray-600 rounded text-xs text-white"
+                    disabled={!!activeSimulation}
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="block text-xs text-gray-300">Collision Penalty</label>
+                  <input
+                    type="number"
+                    step="0.001"
+                    min="0"
+                    max="1"
+                    value={fitnessConfig.collisionPenalty}
+                    onChange={(e) => handleFitnessConfigChange('collisionPenalty', parseFloat(e.target.value) || 0)}
+                    className="w-full px-2 py-1 bg-gray-800 border border-gray-600 rounded text-xs text-white"
+                    disabled={!!activeSimulation}
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="block text-xs text-gray-300">Efficiency Penalty</label>
+                  <input
+                    type="number"
+                    step="0.0001"
+                    min="0"
+                    max="0.1"
+                    value={fitnessConfig.efficiencyPenalty}
+                    onChange={(e) => handleFitnessConfigChange('efficiencyPenalty', parseFloat(e.target.value) || 0)}
+                    className="w-full px-2 py-1 bg-gray-800 border border-gray-600 rounded text-xs text-white"
+                    disabled={!!activeSimulation}
+                  />
+                </div>
               </div>
             </div>
           </div>

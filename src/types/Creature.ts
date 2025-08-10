@@ -219,7 +219,12 @@ export class CreatureEntity {
   /**
    * Process vision input and run neural network to determine next action
    */
-  public run(obstacles: Rectangle[], otherCreatures: Rectangle[] = []): { shouldShoot: boolean } {
+  public run(obstacles: Rectangle[], otherCreatures: Rectangle[] = [], fitnessConfig?: {
+    forwardMovementReward: number,
+    survivalReward: number,
+    collisionPenalty: number,
+    efficiencyPenalty: number
+  }): { shouldShoot: boolean } {
     if (!this.isAlive) return { shouldShoot: false }
 
     // Cast vision rays to get visual input
@@ -284,7 +289,7 @@ export class CreatureEntity {
     // Use vision quality as collision indicator (lower values = more obstacles nearby)
     const visionQuality = visionData.distances.reduce((sum, d) => sum + d, 0) / visionData.distances.length
     const obstacleProximity = 1 - visionQuality // Higher when obstacles are close
-    this.updateFitness(forwardSpeed, obstacleProximity * 10)
+    this.updateFitness(forwardSpeed, obstacleProximity * 10, fitnessConfig)
 
     // Determine if creature wants to shoot
     const shouldShoot = shootDecision > 0.5 && this.canShoot()
@@ -296,18 +301,31 @@ export class CreatureEntity {
     return this.brain.process(inputs)
   }
 
-  private updateFitness(forwardSpeed: number, collisions: number): void {
+  private updateFitness(forwardSpeed: number, collisions: number, fitnessConfig?: {
+    forwardMovementReward: number,
+    survivalReward: number,
+    collisionPenalty: number,
+    efficiencyPenalty: number
+  }): void {
+    // Use default values if no config provided (backwards compatibility)
+    const config = fitnessConfig || {
+      forwardMovementReward: 0.1,
+      survivalReward: 0.01,
+      collisionPenalty: 0.05,
+      efficiencyPenalty: 0.001
+    }
+    
     // Reward forward movement
-    this.fitness += forwardSpeed * 0.1
+    this.fitness += forwardSpeed * config.forwardMovementReward
     
     // Reward staying alive
-    this.fitness += 0.01
+    this.fitness += config.survivalReward
     
     // Penalize collisions
-    this.fitness -= collisions * 0.05
+    this.fitness -= collisions * config.collisionPenalty
     
     // Small penalty for existing (encourages efficiency)
-    this.fitness -= 0.001
+    this.fitness -= config.efficiencyPenalty
   }
 
   /**
