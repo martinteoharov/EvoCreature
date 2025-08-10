@@ -21,8 +21,6 @@ export default function Home() {
   const [topPerformers, setTopPerformers] = useState<CreatureEntity[]>([])
   const [survivors, setSurvivors] = useState<CreatureEntity[]>([])
   const [autoEvolve, setAutoEvolve] = useState(false)
-  const [speedMode, setSpeedMode] = useState(false)
-  const [speedGenerationsLeft, setSpeedGenerationsLeft] = useState(0)
   const [simulationSpeed, setSimulationSpeed] = useState(1)
   const [canvasWidth, setCanvasWidth] = useState(800)
   const [canvasHeight, setCanvasHeight] = useState(600)
@@ -72,18 +70,9 @@ export default function Home() {
     setSurvivors(survivorsList)
     setTopPerformers(topPerformersList)
     
-    if (speedMode && speedGenerationsLeft > 1) {
-      setSpeedGenerationsLeft(prev => prev - 1)
-    } else if (speedMode && speedGenerationsLeft <= 1) {
-      setSpeedMode(false)
-      setSpeedGenerationsLeft(0)
-      setSimulationSpeed(1)
-    }
-    
     if (autoEvolve) {
-      setTimeout(() => {
-        handleNextGenerationAndRun()
-      }, speedMode ? 100 : 1000)
+      // Jump straight into next generation without delay
+      handleNextGenerationAndRun()
     }
   }
 
@@ -114,16 +103,8 @@ export default function Home() {
     }
   }
 
-  const handleSpeedMode = () => {
-    if (!speedMode) {
-      setSpeedMode(true)
-      setSpeedGenerationsLeft(20)
-      setSimulationSpeed(100)
-    } else {
-      setSpeedMode(false)
-      setSpeedGenerationsLeft(0)
-      setSimulationSpeed(1)
-    }
+  const handleSpeedChange = (newSpeed: number) => {
+    setSimulationSpeed(newSpeed)
   }
 
   const currentArenaInfo = ARENAS.find(a => a.id === currentArena)
@@ -271,27 +252,29 @@ export default function Home() {
               </button>
             </div>
 
-            {/* Speed Mode */}
+            {/* Speed Control */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <span className="text-sm text-white">Speed Mode (100x)</span>
-                <button
-                  onClick={handleSpeedMode}
-                  className={`px-3 py-1 text-xs rounded transition-colors ${
-                    speedMode 
-                      ? 'bg-orange-600 hover:bg-orange-700 text-orange-100' 
-                      : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
-                  }`}
-                  disabled={!activeSimulation}
-                >
-                  {speedMode ? `${speedGenerationsLeft} left` : 'Activate'}
-                </button>
+                <span className="text-sm text-white">Speed</span>
+                <span className="text-sm text-orange-400">{simulationSpeed}x</span>
               </div>
-              {speedMode && (
-                <div className="text-xs text-orange-400">
-                  Running at 100x speed for {speedGenerationsLeft} more generation{speedGenerationsLeft !== 1 ? 's' : ''}
-                </div>
-              )}
+              <input
+                type="range"
+                min="1"
+                max="5"
+                step="1"
+                value={simulationSpeed}
+                onChange={(e) => handleSpeedChange(parseInt(e.target.value))}
+                className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer slider"
+                disabled={!activeSimulation}
+              />
+              <div className="flex justify-between text-xs text-gray-400">
+                <span>1x</span>
+                <span>2x</span>
+                <span>3x</span>
+                <span>4x</span>
+                <span>5x</span>
+              </div>
             </div>
           </div>
         </div>

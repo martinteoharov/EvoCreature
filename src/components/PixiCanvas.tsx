@@ -295,7 +295,6 @@ export default function PixiCanvas({
   const projectilesRef = useRef<Projectile[]>([])
   const hoveredCreatureId = useRef<string | null>(null)
   const isDestroying = useRef<boolean>(false)
-  const initializationPromise = useRef<Promise<void> | null>(null)
   const simulationTickerRef = useRef<((ticker: PIXI.Ticker) => void) | null>(null)
 
   // Update creatures ref when props change
@@ -391,7 +390,7 @@ export default function PixiCanvas({
       // Simulation loop
       const simulationTicker = (_ticker: PIXI.Ticker) => {
         if (!isSimulationActive || creaturesRef.current.length === 0) return
-        if (!app.current || !app.current.stage) return // Safety check
+        if (!app.current || !app.current.stage || isDestroying.current) return // Safety check
 
         // Run multiple simulation steps for speed multiplier
         let finalUpdatedCreatures: CreatureEntity[] = []
@@ -591,6 +590,11 @@ export default function PixiCanvas({
       // Return cleanup function
       return () => {
         window.removeEventListener('resize', resize)
+        // Remove ticker if it exists
+        if (app.current?.ticker && simulationTickerRef.current) {
+          app.current.ticker.remove(simulationTickerRef.current)
+          simulationTickerRef.current = null
+        }
       }
     }
 
@@ -604,9 +608,14 @@ export default function PixiCanvas({
       isDestroying.current = true
       
       try {
-        // Call resize cleanup if it exists
+        // Call resize cleanup if it exists (this removes the ticker)
         if (destroyer) {
           destroyer()
+        }
+        
+        // Ensure ticker is stopped before destroying app
+        if (app.current?.ticker) {
+          app.current.ticker.stop()
         }
         
         // Destroy the app which should handle all internal cleanup

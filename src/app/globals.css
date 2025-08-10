@@ -96,3 +96,35 @@ h1, h2, h3, h4, h5, h6 {
   background: var(--foreground-muted);
 }
 
+/* Range slider styling */
+.slider::-webkit-slider-thumb {
+  appearance: none;
+  height: 16px;
+  width: 16px;
+  border-radius: 50%;
+  background: #f97316;
+  cursor: pointer;
+  box-shadow: 0 0 2px 0 #000;
+}
+
+.slider::-moz-range-thumb {
+  height: 16px;
+  width: 16px;
+  border-radius: 50%;
+  background: #f97316;
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 0 2px 0 #000;
+}
+
+.slider:disabled::-webkit-slider-thumb {
+  background: #6b7280;
+  cursor: not-allowed;
+}
+
+.slider:disabled::-moz-range-thumb {
+  background: #6b7280;
+  cursor: not-allowed;
+}
+
+
