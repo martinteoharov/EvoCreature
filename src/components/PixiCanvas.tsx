@@ -294,6 +294,9 @@ export default function PixiCanvas({
   const wallsRef = useRef<ArenaWall[]>([])
   const projectilesRef = useRef<Projectile[]>([])
   const hoveredCreatureId = useRef<string | null>(null)
+  const isDestroying = useRef<boolean>(false)
+  const initializationPromise = useRef<Promise<void> | null>(null)
+  const simulationTickerRef = useRef<((ticker: PIXI.Ticker) => void) | null>(null)
 
   // Update creatures ref when props change
   useEffect(() => {
@@ -303,6 +306,7 @@ export default function PixiCanvas({
   useEffect(() => {
     if (!pixiContainer.current) return
 
+    isDestroying.current = false
     app.current = new PIXI.Application()
 
     const initPixi = async () => {
@@ -321,13 +325,19 @@ export default function PixiCanvas({
       await app.current.init({
         width,
         height,
-        background: '#0f0f0f', // background color
+        background: '#0f0f0f',
         antialias: true,
         resolution: window.devicePixelRatio || 1,
         autoDensity: true,
       })
 
-      pixiContainer.current.appendChild(app.current.canvas)
+      // Double-check container still exists before appending
+      if (pixiContainer.current && app.current.canvas) {
+        pixiContainer.current.appendChild(app.current.canvas)
+      } else {
+        console.warn('PixiContainer not available for appendChild')
+        return
+      }
 
       // World container with subtle grid
       const world = new PIXI.Container()
@@ -381,6 +391,7 @@ export default function PixiCanvas({
       // Simulation loop
       const simulationTicker = (_ticker: PIXI.Ticker) => {
         if (!isSimulationActive || creaturesRef.current.length === 0) return
+        if (!app.current || !app.current.stage) return // Safety check
 
         // Run multiple simulation steps for speed multiplier
         let finalUpdatedCreatures: CreatureEntity[] = []
@@ -390,7 +401,12 @@ export default function PixiCanvas({
           
           // Only clear graphics on the final iteration for rendering
           if (speedStep === simulationSpeed - 1) {
-            creatureContainer.removeChildren()
+            try {
+              creatureContainer.removeChildren()
+            } catch (error) {
+              console.warn('Error removing creature children:', error)
+              return
+            }
           }
 
         // Process each creature
@@ -456,14 +472,23 @@ export default function PixiCanvas({
             })
             
             // Add both containers to the scene (rays first so they appear behind)
-            creatureContainer.addChild(rayContainer)
-            creatureContainer.addChild(creatureGfx)
+            try {
+              creatureContainer.addChild(rayContainer)
+              creatureContainer.addChild(creatureGfx)
+            } catch (error) {
+              console.warn('Error adding creature graphics:', error)
+            }
           }
         })
 
         // Process projectiles (only render on final iteration)
         if (speedStep === simulationSpeed - 1) {
-          projectileContainer.removeChildren()
+          try {
+            projectileContainer.removeChildren()
+          } catch (error) {
+            console.warn('Error removing projectile children:', error)
+            return
+          }
         }
         const allObstacles = [...wallsRef.current, ...obstaclesRef.current]
         
@@ -499,10 +524,14 @@ export default function PixiCanvas({
 
           // Create visual representation only on final iteration
           if (speedStep === simulationSpeed - 1) {
-            const projectileGraphics = createProjectileGraphics(projectile)
-            projectileGraphics.x = projectile.position.x
-            projectileGraphics.y = projectile.position.y
-            projectileContainer.addChild(projectileGraphics)
+            try {
+              const projectileGraphics = createProjectileGraphics(projectile)
+              projectileGraphics.x = projectile.position.x
+              projectileGraphics.y = projectile.position.y
+              projectileContainer.addChild(projectileGraphics)
+            } catch (error) {
+              console.warn('Error adding projectile graphics:', error)
+            }
           }
 
           return true // Keep projectile
@@ -532,6 +561,8 @@ export default function PixiCanvas({
         }
       }
 
+      // Store ticker reference and add it
+      simulationTickerRef.current = simulationTicker
       app.current.ticker.add(simulationTicker)
 
       // Resize handling
@@ -557,10 +588,9 @@ export default function PixiCanvas({
       resize()
       window.addEventListener('resize', resize)
 
-      // Cleanup
+      // Return cleanup function
       return () => {
         window.removeEventListener('resize', resize)
-        app.current?.ticker.remove(simulationTicker)
       }
     }
 
@@ -570,13 +600,29 @@ export default function PixiCanvas({
     })
 
     return () => {
-      if (destroyer) destroyer()
-      if (app.current) {
-        app.current.destroy(true, { children: true, texture: true })
+      if (isDestroying.current) return // Prevent double cleanup
+      isDestroying.current = true
+      
+      try {
+        // Call resize cleanup if it exists
+        if (destroyer) {
+          destroyer()
+        }
+        
+        // Destroy the app which should handle all internal cleanup
+        if (app.current) {
+          app.current.destroy(true)
+          app.current = null
+        }
+      } catch (error) {
+        console.warn('Error during PIXI cleanup:', error)
+        // Force null even if destroy failed
         app.current = null
+      } finally {
+        isDestroying.current = false
       }
     }
-  }, [canvasWidth, canvasHeight, arena, isSimulationActive, simulationSpeed, onCreatureUpdate])
+  }, [canvasWidth, canvasHeight, arena, isSimulationActive, simulationSpeed, onCreatureUpdate, onCanvasDimensionsUpdate])
 
   return (
     <div 

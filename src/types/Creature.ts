@@ -102,7 +102,7 @@ export class CreatureEntity {
   private initializeBrain(genome?: Genome): Brain {
     const config: BrainConfig = {
       inputSize: 14, // 10 vision rays + 4 environment inputs (energy, velocity, wall proximity, creature proximity)
-      hiddenLayers: [1200, 800, 400], // Three massive hidden layers - 100x bigger than before!
+      hiddenLayers: [120, 80], // Two reasonably sized hidden layers - 10x smaller than before
       outputSize: 4, // left turn, right turn, forward speed, shoot
       mutationRate: 0.1,
       mutationStrength: 0.3
