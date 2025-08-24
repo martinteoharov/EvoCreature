@@ -107,7 +107,7 @@ const createCreatureGraphics = (
   }
 
   // Health/energy indicator
-  if (creature.energy < 50) {
+  if (creature.energy < 500) {
     const healthBar = new PIXI.Graphics()
     const barWidth = CREATURE_SIZE * 0.8
     const barHeight = 3
@@ -118,10 +118,10 @@ const createCreatureGraphics = (
       .fill(0x404040)
     
     // Health bar
-    const healthWidth = (creature.energy / 100) * barWidth
+    const healthWidth = (creature.energy / 1000) * barWidth
     healthBar
       .rect(-barWidth/2, -CREATURE_SIZE/2 - 8, healthWidth, barHeight)
-      .fill(creature.energy > 25 ? 0x22c55e : 0xef4444)
+      .fill(creature.energy > 250 ? 0x22c55e : 0xef4444)
     
     creatureContainer.addChild(healthBar)
   }
@@ -135,9 +135,9 @@ const createCreatureGraphics = (
 function createProjectileGraphics(_projectile: Projectile): PIXI.Graphics {
   const graphics = new PIXI.Graphics()
   graphics
-    .circle(0, 0, 3) // Small circle for projectile
+    .circle(0, 0, 8) // Much bigger circle for projectile (was 3, now 8)
     .fill(0xffff00) // Yellow color
-    .stroke({ color: 0xffa500, alpha: 0.8, width: 1 })
+    .stroke({ color: 0xffa500, alpha: 0.8, width: 2 }) // Thicker stroke too
   
   return graphics
 }
@@ -304,10 +304,16 @@ export default function PixiCanvas({
   const hoveredCreatureId = useRef<string | null>(null)
   const isDestroying = useRef<boolean>(false)
   const simulationTickerRef = useRef<((ticker: PIXI.Ticker) => void) | null>(null)
+  const generationEndedRef = useRef<boolean>(false)
+  const currentFrame = useRef<number>(0)
 
   // Update creatures ref when props change
   useEffect(() => {
     creaturesRef.current = creatures
+    // Reset generation ended flag when new creatures are provided
+    generationEndedRef.current = false
+    // Reset frame counter for new simulation
+    currentFrame.current = 0
   }, [creatures])
 
   useEffect(() => {
@@ -399,15 +405,29 @@ export default function PixiCanvas({
       const simulationTicker = (_ticker: PIXI.Ticker) => {
         if (!isSimulationActive || creaturesRef.current.length === 0) return
         if (!app.current || !app.current.stage || isDestroying.current) return // Safety check
+        
+        const frameStartTime = performance.now()
 
         // Run multiple simulation steps for speed multiplier
         let finalUpdatedCreatures: CreatureEntity[] = []
+        const isMaxSpeed = simulationSpeed === 999
         
-        for (let speedStep = 0; speedStep < simulationSpeed; speedStep++) {
+        const actualSpeed = isMaxSpeed ? 10000 : simulationSpeed // Run up to 10000 steps per frame in MAX mode
+        
+        for (let speedStep = 0; speedStep < actualSpeed; speedStep++) {
+          // In MAX mode, yield every 100 steps to prevent UI freeze
+          if (isMaxSpeed && speedStep % 100 === 0 && speedStep > 0) {
+            const elapsed = performance.now() - frameStartTime
+            if (elapsed > 8) break // Yield if we've used more than 8ms (leaving time for other tasks)
+          }
+          
+          // Increment frame counter for each simulation step
+          currentFrame.current++
+          
           const updatedCreatures = [...creaturesRef.current]
           
-          // Only clear graphics on the final iteration for rendering
-          if (speedStep === simulationSpeed - 1) {
+          // Only clear graphics on the final iteration for rendering (skip in MAX mode)
+          if (!isMaxSpeed && speedStep === actualSpeed - 1) {
             try {
               creatureContainer.removeChildren()
             } catch (error) {
@@ -426,8 +446,13 @@ export default function PixiCanvas({
             .filter(c => c.id !== creature.id && c.isAlive)
             .map(c => c.getBoundingRect())
 
+          // Set birth frame for new creatures
+          if (creature.birthFrame === 0) {
+            creature.setBirthFrame(currentFrame.current)
+          }
+
           // Run creature AI with vision system
-          const aiResult = creature.run(allObstacles, otherCreatureRects, fitnessConfig)
+          const aiResult = creature.run(allObstacles, otherCreatureRects, fitnessConfig, currentFrame.current)
 
           // Handle shooting
           if (aiResult.shouldShoot) {
@@ -442,8 +467,8 @@ export default function PixiCanvas({
             resolveCreatureWallCollision(creature, wallsRef.current)
           }
 
-          // Create visual representation only on final speed iteration
-          if (speedStep === simulationSpeed - 1) {
+          // Create visual representation only on final speed iteration (skip in MAX mode)
+          if (!isMaxSpeed && speedStep === actualSpeed - 1) {
             const isHovered = hoveredCreatureId.current === creature.id
             const isSelected = selectedCreatureId === creature.id
             const { creatureContainer: creatureGfx, rayContainer } = createCreatureGraphics(creature, false, isHovered, isSelected)
@@ -488,8 +513,8 @@ export default function PixiCanvas({
           }
         })
 
-        // Process projectiles (only render on final iteration)
-        if (speedStep === simulationSpeed - 1) {
+        // Process projectiles (only render on final iteration, skip in MAX mode)
+        if (!isMaxSpeed && speedStep === actualSpeed - 1) {
           try {
             projectileContainer.removeChildren()
           } catch (error) {
@@ -518,8 +543,13 @@ export default function PixiCanvas({
               // Award kill reward to the shooter if target died
               if (damageResult.died && projectile.ownerId) {
                 const shooter = updatedCreatures.find(c => c.id === projectile.ownerId)
-                if (shooter && fitnessConfig?.killReward) {
-                  shooter.fitness += fitnessConfig.killReward
+                if (shooter) {
+                  // Award fitness points for the kill
+                  if (fitnessConfig?.killReward) {
+                    shooter.fitness += fitnessConfig.killReward
+                  }
+                  // Restore shooter to full health as reward for killing
+                  shooter.restoreFullHealth()
                 }
               }
               
@@ -538,8 +568,8 @@ export default function PixiCanvas({
             return false // Remove out-of-bounds projectile
           }
 
-          // Create visual representation only on final iteration
-          if (speedStep === simulationSpeed - 1) {
+          // Create visual representation only on final iteration (skip in MAX mode)
+          if (!isMaxSpeed && speedStep === actualSpeed - 1) {
             try {
               const projectileGraphics = createProjectileGraphics(projectile)
               projectileGraphics.x = projectile.position.x
@@ -553,22 +583,26 @@ export default function PixiCanvas({
           return true // Keep projectile
         })
 
-        // Check for generation end condition
-        const aliveCreatures = updatedCreatures.filter(c => c.isAlive)
-        if (aliveCreatures.length <= 1 && onGenerationEnd) {
-          // Sort all creatures by fitness to get top performers
-          const topPerformers = [...updatedCreatures]
-            .sort((a, b) => b.fitness - a.fitness)
-            .slice(0, 10)
-          
-          onGenerationEnd(aliveCreatures, topPerformers)
-        }
-
           // Store final creatures for this speed iteration
           finalUpdatedCreatures = updatedCreatures
           
           // Update creatures reference for next iteration
           creaturesRef.current = updatedCreatures
+        }
+        
+        // Check for generation end condition (OUTSIDE speed loop to prevent multiple calls)
+        if (!generationEndedRef.current && finalUpdatedCreatures.length > 0) {
+          const aliveCreatures = finalUpdatedCreatures.filter(c => c.isAlive)
+          if (aliveCreatures.length <= 1 && onGenerationEnd) {
+            generationEndedRef.current = true // Prevent multiple calls
+            
+            // Sort all creatures by fitness to get top performers
+            const topPerformers = [...finalUpdatedCreatures]
+              .sort((a, b) => b.fitness - a.fitness)
+              .slice(0, 10)
+            
+            onGenerationEnd(aliveCreatures, topPerformers)
+          }
         }
         
         // Notify parent of final creature updates (outside speed loop)

@@ -20,8 +20,8 @@ export class Brain {
 
   constructor(config: BrainConfig, network?: NeuralNetwork) {
     this.config = {
-      mutationRate: 0.1,
-      mutationStrength: 0.3,
+      mutationRate: 0.02, // Reduced from 0.1 to 0.02 (2%)
+      mutationStrength: 0.1, // Reduced from 0.3 to 0.1
       ...config
     }
     

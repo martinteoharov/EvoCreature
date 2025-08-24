@@ -131,7 +131,7 @@ export class Genome {
   /**
    * Crossover two genomes to create offspring
    */
-  public static crossover(parent1: Genome, parent2: Genome, metadata?: Partial<GenomeData['metadata']>): Genome {
+  public static crossover(parent1: Genome, parent2: Genome, metadata?: Partial<GenomeData['metadata']>, fitnessBias?: { parent1Fitness: number, parent2Fitness: number }): Genome {
     if (!Genome.areCompatible(parent1, parent2)) {
       throw new Error('Genomes are not compatible for crossover')
     }
@@ -140,9 +140,19 @@ export class Genome {
     const genes2 = parent2.data.genes
     const newGenes: number[] = []
 
-    // Uniform crossover (50% chance from each parent)
+    // Calculate fitness-biased selection probability
+    let parent1Probability = 0.5 // Default to uniform if no fitness provided
+    
+    if (fitnessBias) {
+      const totalFitness = fitnessBias.parent1Fitness + fitnessBias.parent2Fitness
+      if (totalFitness > 0) {
+        parent1Probability = fitnessBias.parent1Fitness / totalFitness
+      }
+    }
+
+    // Fitness-biased crossover
     for (let i = 0; i < genes1.length; i++) {
-      newGenes.push(Math.random() < 0.5 ? genes1[i] : genes2[i])
+      newGenes.push(Math.random() < parent1Probability ? genes1[i] : genes2[i])
     }
 
     return new Genome({
@@ -163,7 +173,7 @@ export class Genome {
   /**
    * Mutate this genome
    */
-  public mutate(mutationRate: number = 0.1, mutationStrength: number = 0.3, metadata?: Partial<GenomeData['metadata']>): Genome {
+  public mutate(mutationRate: number = 0.02, mutationStrength: number = 0.1, metadata?: Partial<GenomeData['metadata']>): Genome {
     const newGenes = this.data.genes.map(gene => {
       if (Math.random() < mutationRate) {
         let mutatedGene = gene + (Math.random() - 0.5) * mutationStrength

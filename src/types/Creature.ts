@@ -49,9 +49,10 @@ export class CreatureEntity {
 
   // Simulation state
   public fitness: number = 0
-  public energy: number = 100
+  public energy: number = 1000 // Much higher starting energy for longer survival
   public age: number = 0
   public isAlive: boolean = true
+  public birthFrame: number = 0 // Track when creature was born for age-based fitness
 
   // Neural network
   public brain: Brain
@@ -68,8 +69,9 @@ export class CreatureEntity {
   // Shooting configuration
   private shootCooldown: number = 0
   private readonly SHOOT_COOLDOWN_MAX = 30 // frames between shots
-  private readonly PROJECTILE_SPEED = 8
-  private readonly PROJECTILE_DAMAGE = 50
+  private readonly PROJECTILE_SPEED = 5 // Faster bullets for more dynamic combat
+  private readonly PROJECTILE_DAMAGE = 500 // Higher damage to compensate for increased energy
+  private readonly SHOOT_ENERGY_COST = 15 // Energy cost per shot
 
   constructor(
     id: string,
@@ -87,6 +89,7 @@ export class CreatureEntity {
     this.generation = generation
     this.arena = arena
     this.birthTime = Date.now()
+    this.birthFrame = 0 // Will be set when simulation starts
 
     // Initialize neural network
     this.brain = this.initializeBrain(genome)
@@ -104,8 +107,8 @@ export class CreatureEntity {
       inputSize: 14, // 10 vision rays + 4 environment inputs (energy, velocity, wall proximity, creature proximity)
       hiddenLayers: [120, 80], // Two reasonably sized hidden layers - 10x smaller than before
       outputSize: 4, // left turn, right turn, forward speed, shoot
-      mutationRate: 0.1,
-      mutationStrength: 0.3
+      mutationRate: 0.02, // Reduced to 2%
+      mutationStrength: 0.1 // Reduced strength
     }
 
     if (genome) {
@@ -158,7 +161,7 @@ export class CreatureEntity {
    * Check if creature wants to shoot and can shoot
    */
   public canShoot(): boolean {
-    return this.isAlive && this.shootCooldown <= 0
+    return this.isAlive && this.shootCooldown <= 0 && this.energy >= this.SHOOT_ENERGY_COST
   }
 
   /**
@@ -168,6 +171,7 @@ export class CreatureEntity {
     if (!this.canShoot()) return null
 
     this.shootCooldown = this.SHOOT_COOLDOWN_MAX
+    this.energy -= this.SHOOT_ENERGY_COST // Consume energy when shooting
 
     const projectileId = `projectile-${this.id}-${Date.now()}`
     
@@ -215,7 +219,7 @@ export class CreatureEntity {
     survivalReward: number,
     collisionPenalty: number,
     efficiencyPenalty: number
-  }): { shouldShoot: boolean } {
+  }, currentFrame: number = 0): { shouldShoot: boolean } {
     if (!this.isAlive) return { shouldShoot: false }
 
     // Cast vision rays to get visual input
@@ -227,7 +231,7 @@ export class CreatureEntity {
       ...visionData.distances,
       
       // Environmental inputs
-      this.energy / 100, // energy level (0-1)
+      this.energy / 1000, // energy level (0-1) - updated for new max energy
       Math.min(Math.abs(this.velocity.x) / 2.0, 1), // velocity magnitude (0-1)
       Math.min(Math.abs(this.velocity.y) / 2.0, 1), // velocity magnitude (0-1)
       
@@ -264,7 +268,7 @@ export class CreatureEntity {
 
     // Update creature state
     this.age += 1
-    this.energy -= 0.1 + Math.abs(forwardSpeed) * 0.2 // moving costs energy
+    this.energy -= 0.5 + Math.abs(forwardSpeed) * 0.3 // Natural health drain over time
     
     // Update shooting cooldown
     if (this.shootCooldown > 0) {
@@ -280,7 +284,7 @@ export class CreatureEntity {
     // Use vision quality as collision indicator (lower values = more obstacles nearby)
     const visionQuality = visionData.distances.reduce((sum, d) => sum + d, 0) / visionData.distances.length
     const obstacleProximity = 1 - visionQuality // Higher when obstacles are close
-    this.updateFitness(forwardSpeed, obstacleProximity * 10, fitnessConfig)
+    this.updateFitness(forwardSpeed, obstacleProximity * 2, fitnessConfig, currentFrame)
 
     // Determine if creature wants to shoot
     const shouldShoot = shootDecision > 0.5 && this.canShoot()
@@ -298,27 +302,29 @@ export class CreatureEntity {
     survivalReward: number,
     collisionPenalty: number,
     efficiencyPenalty: number
-  }): void {
+  }, currentFrame: number = 0): void {
     // Use default values if no config provided (backwards compatibility)
     const config = fitnessConfig || {
-      killReward: 10.0,
-      forwardMovementReward: 0.1,
-      survivalReward: 0.01,
-      collisionPenalty: 0.05,
-      efficiencyPenalty: 0.001
+      killReward: 50.0,
+      forwardMovementReward: 1.0,
+      survivalReward: 1.0, // Higher survival reward
+      collisionPenalty: 0.1, // Lower collision penalty
+      efficiencyPenalty: 0.0 // No efficiency penalty - survival time matters
     }
     
-    // Reward forward movement
+    // Primary fitness: Time survived (age in frames)
+    const survivalTime = currentFrame - this.birthFrame
+    this.fitness = survivalTime * config.survivalReward
+    
+    // Bonus for forward movement (encourages exploration)
     this.fitness += forwardSpeed * config.forwardMovementReward
     
-    // Reward staying alive
-    this.fitness += config.survivalReward
+    // Minor penalty for excessive collisions (but don't make it punitive)
+    const cappedCollisions = Math.min(collisions, 2) // Lower cap
+    this.fitness -= cappedCollisions * config.collisionPenalty
     
-    // Penalize collisions
-    this.fitness -= collisions * config.collisionPenalty
-    
-    // Small penalty for existing (encourages efficiency)
-    this.fitness -= config.efficiencyPenalty
+    // Fitness floor to prevent negatives
+    this.fitness = Math.max(this.fitness, 0)
   }
 
   /**
@@ -333,6 +339,13 @@ export class CreatureEntity {
     }
     
     return { died: false }
+  }
+
+  /**
+   * Restore creature to full health (when scoring a kill)
+   */
+  public restoreFullHealth(): void {
+    this.energy = 1000 // Restore to maximum health
   }
 
   /**
@@ -365,10 +378,13 @@ export class CreatureEntity {
       createdAt: Date.now(),
       parentIds: [parent1.id, parent2.id],
       generation: Math.max(parent1.generation, parent2.generation) + 1
+    }, {
+      parent1Fitness: parent1.fitness,
+      parent2Fitness: parent2.fitness
     })
 
-    // Apply mutation
-    const mutatedGenome = offspringGenome.mutate(0.1, 0.3)
+    // Apply mutation with reduced rates
+    const mutatedGenome = offspringGenome.mutate(0.02, 0.1)
 
     return new CreatureEntity(
       id,
@@ -397,6 +413,13 @@ export class CreatureEntity {
    */
   public loadGenome(genome: Genome): void {
     this.brain = genome.toBrain()
+  }
+
+  /**
+   * Set the birth frame for age-based fitness calculation
+   */
+  public setBirthFrame(frame: number): void {
+    this.birthFrame = frame
   }
 
   /**

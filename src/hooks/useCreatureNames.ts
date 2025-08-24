@@ -28,6 +28,9 @@ export interface SimulationRun {
   endTime?: number
   isActive: boolean
   participants: string[] // creature IDs
+  maxFitness: number
+  meanFitness: number
+  minFitness: number
 }
 
 export function useCreatureNames() {
@@ -116,7 +119,10 @@ export function useCreatureNames() {
       generation: currentGeneration,
       startTime: Date.now(),
       isActive: true,
-      participants: population.map(c => c.id)
+      participants: population.map(c => c.id),
+      maxFitness: 0,
+      meanFitness: 0,
+      minFitness: 0
     }
 
     setCreatures(prev => [
@@ -127,6 +133,25 @@ export function useCreatureNames() {
 
     return newRun
   }, [createInitialPopulation, currentGeneration])
+
+  const updateSimulationFitnessStats = useCallback((runId: string, fitnessValues: number[]) => {
+    if (fitnessValues.length === 0) return
+    
+    const maxFitness = Math.max(...fitnessValues)
+    const meanFitness = fitnessValues.reduce((sum, f) => sum + f, 0) / fitnessValues.length
+    const minFitness = Math.min(...fitnessValues)
+    
+    setSimulationRuns(prev => prev.map(run => 
+      run.id === runId 
+        ? { 
+            ...run, 
+            maxFitness: Math.max(run.maxFitness, maxFitness),
+            meanFitness: meanFitness,
+            minFitness: minFitness
+          }
+        : run
+    ))
+  }, [])
 
   const completeSimulation = useCallback((runId: string, fitnessUpdates: Record<string, number>) => {
     setSimulationRuns(prev => prev.map(run => 
@@ -144,7 +169,7 @@ export function useCreatureNames() {
     }))
 
     setCurrentGeneration(prev => prev + 1)
-  }, [])
+  }, [currentGeneration])
 
   const pinCreature = useCallback((id: string) => {
     setCreatures(prev => prev.map(creature => {
@@ -263,6 +288,7 @@ export function useCreatureNames() {
     createInitialPopulation,
     startSimulation,
     completeSimulation,
+    updateSimulationFitnessStats,
     pinCreature,
     unpinCreature,
     saveCreature,

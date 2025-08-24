@@ -24,7 +24,7 @@ export class VisionSystem {
 
   constructor(config: VisionConfig = {
     rayCount: 10,
-    maxDistance: 200,
+    maxDistance: 600, // 3x longer vision range (was 200, now 600)
     fovAngle: Math.PI / 3 // 60 degrees
   }) {
     this.config = config
@@ -246,7 +246,7 @@ export class VisionSystem {
 export function createDefaultVisionSystem(): VisionSystem {
   return new VisionSystem({
     rayCount: 10,
-    maxDistance: 200,
+    maxDistance: 600, // 3x longer vision range (was 200, now 600)
     fovAngle: Math.PI / 3 // 60 degrees
   })
 }

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import PixiCanvas from "@/components/PixiCanvas"
 import CreatureSidebar from "@/components/CreatureSidebar"
 import { useCreatureNames } from "@/hooks/useCreatureNames"
@@ -20,18 +20,25 @@ export default function Home() {
   const [generationEnded, setGenerationEnded] = useState(false)
   const [topPerformers, setTopPerformers] = useState<CreatureEntity[]>([])
   const [autoEvolve, setAutoEvolve] = useState(false)
-  const [isAutoEvolving, setIsAutoEvolving] = useState(false)
   const [simulationSpeed, setSimulationSpeed] = useState(1)
   const [canvasWidth, setCanvasWidth] = useState(800)
   const [canvasHeight, setCanvasHeight] = useState(600)
   
+  // Track fitness stats locally without causing re-renders
+  const currentFitnessValues = useRef<number[]>([])
+  const [displayFitnessStats, setDisplayFitnessStats] = useState<{
+    max: number
+    mean: number
+    min: number
+  }>({ max: 0, mean: 0, min: 0 })
+  
   // Fitness configuration
   const [fitnessConfig, setFitnessConfig] = useState({
-    killReward: 10.0, // Highest reward for eliminating other creatures
-    forwardMovementReward: 0.1,
-    survivalReward: 0.01,
-    collisionPenalty: 0.05,
-    efficiencyPenalty: 0.001
+    killReward: 50.0, // Bonus for eliminating other creatures
+    forwardMovementReward: 1.0, // Bonus for exploration/movement
+    survivalReward: 1.0, // Primary fitness: time survived (frames alive)
+    collisionPenalty: 0.1, // Minor penalty for excessive collisions
+    efficiencyPenalty: 0.0 // No energy penalty - survival time is what matters
   })
   const {
     savedCreatures,
@@ -40,6 +47,7 @@ export default function Home() {
     currentGeneration,
     startSimulation,
     completeSimulation,
+    updateSimulationFitnessStats,
     pinCreature,
     unpinCreature,
     saveCreature,
@@ -51,6 +59,7 @@ export default function Home() {
     if (!activeSimulation) {
       setGenerationEnded(false)
       setTopPerformers([])
+      currentFitnessValues.current = [] // Reset fitness tracking for new simulation
       startSimulation(currentArena, canvasWidth, canvasHeight)
     }
   }
@@ -75,9 +84,35 @@ export default function Home() {
     setGenerationEnded(true)
     setTopPerformers(topPerformersList)
     
-    if (autoEvolve && !isAutoEvolving && activeSimulation) {
-      setIsAutoEvolving(true)
+    // Update the simulation with final fitness stats and set display
+    if (activeSimulation && currentFitnessValues.current.length > 0) {
+      const fitnessValues = currentFitnessValues.current.filter(f => !isNaN(f) && isFinite(f)) // Filter out invalid values
       
+      if (fitnessValues.length > 0) {
+        updateSimulationFitnessStats(activeSimulation.id, fitnessValues)
+        
+        // Calculate and set display stats
+        const maxFitness = Math.max(...fitnessValues)
+        const meanFitness = fitnessValues.reduce((sum, f) => sum + f, 0) / fitnessValues.length
+        const minFitness = Math.min(...fitnessValues)
+        
+        console.log(`🧬 Generation ${currentGeneration} Fitness:`, {
+          max: maxFitness.toFixed(2),
+          mean: meanFitness.toFixed(2), 
+          min: minFitness.toFixed(2),
+          count: fitnessValues.length,
+          raw: fitnessValues.slice(0, 3) // Show first 3 raw values for debugging
+        })
+        
+        setDisplayFitnessStats({ max: maxFitness, mean: meanFitness, min: minFitness })
+      } else {
+        console.warn('⚠️ No valid fitness values found in generation', currentGeneration)
+      }
+    } else {
+      console.warn('⚠️ No fitness values to process in generation', currentGeneration)
+    }
+    
+    if (autoEvolve && activeSimulation) {
       // Complete the current simulation and start the next one
       const fitnessUpdates: Record<string, number> = {}
       topPerformersList.forEach(creature => {
@@ -90,8 +125,8 @@ export default function Home() {
       // Then start the next one after a short delay
       setTimeout(() => {
         setGenerationEnded(false)
+        currentFitnessValues.current = [] // Reset for next generation
         startSimulation(currentArena, canvasWidth, canvasHeight)
-        setIsAutoEvolving(false)
       }, 100)
     }
   }
@@ -119,14 +154,16 @@ export default function Home() {
       
       // Immediately start a new simulation for the next generation
       setTimeout(() => {
+        currentFitnessValues.current = [] // Reset for next generation
         startSimulation(currentArena, canvasWidth, canvasHeight)
-        setIsAutoEvolving(false)
       }, 100)
     }
   }
 
   const handleSpeedChange = (newSpeed: number) => {
-    setSimulationSpeed(newSpeed)
+    // Map slider value 6 to MAX mode (999), others stay as is
+    const actualSpeed = newSpeed === 6 ? 999 : newSpeed
+    setSimulationSpeed(actualSpeed)
   }
 
   const handleFitnessConfigChange = (key: keyof typeof fitnessConfig, value: number) => {
@@ -158,7 +195,9 @@ export default function Home() {
           isSimulationActive={!!activeSimulation && !generationEnded}
           simulationSpeed={simulationSpeed}
           onCreatureUpdate={(updatedCreatures) => {
-            console.log('Creatures updated:', updatedCreatures.length)
+            if (updatedCreatures.length > 0) {
+              currentFitnessValues.current = updatedCreatures.map(c => c.fitness)
+            }
           }}
           onCreatureSelect={setSelectedCreatureId}
           onGenerationEnd={handleGenerationEnd}
@@ -197,6 +236,31 @@ export default function Home() {
           <div className="text-sm text-muted">
             Generation {currentGeneration}
           </div>
+          
+          {/* Fitness Statistics Panel */}
+          {(displayFitnessStats.max !== 0 || displayFitnessStats.mean !== 0 || displayFitnessStats.min !== 0) && (
+            <div className="mt-3 p-3 bg-gray-800/50 rounded-lg border border-gray-600">
+              <h4 className="text-xs font-semibold text-gray-300 mb-2">Generation Fitness Stats</h4>
+              <div className="flex justify-between items-center text-xs">
+                <div className="flex items-center space-x-1">
+                  <span className="text-gray-400">Max:</span>
+                  <span className="text-green-400 font-bold">{displayFitnessStats.max.toFixed(1)}</span>
+                </div>
+                <div className="flex items-center space-x-1">
+                  <span className="text-gray-400">Mean:</span>
+                  <span className="text-blue-400 font-bold">{displayFitnessStats.mean.toFixed(1)}</span>
+                </div>
+                <div className="flex items-center space-x-1">
+                  <span className="text-gray-400">Min:</span>
+                  <span className="text-orange-400 font-bold">{displayFitnessStats.min.toFixed(1)}</span>
+                </div>
+                <div className="flex items-center space-x-1">
+                  <span className="text-gray-400">Range:</span>
+                  <span className="text-purple-400 font-bold">{(displayFitnessStats.max - displayFitnessStats.min).toFixed(1)}</span>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Arena Selection */}
@@ -237,50 +301,52 @@ export default function Home() {
                <div className="space-y-2">
                  <div className="flex items-center space-x-2 px-3 py-2 bg-yellow-900/50 rounded">
                    <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
-                   <span className="text-sm text-yellow-400">Generation Complete</span>
+                   <span className="text-sm text-yellow-400">
+                     {autoEvolve ? 'Auto evolving to next generation...' : 'Generation Complete'}
+                   </span>
                  </div>
                                  <button
                   onClick={handleNextGenerationAndRun}
-                  className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded transition-colors"
+                  disabled={autoEvolve}
+                  className={`w-full px-4 py-2 text-white text-sm rounded transition-colors ${
+                    autoEvolve 
+                      ? 'bg-gray-500 cursor-not-allowed opacity-50' 
+                      : 'bg-blue-600 hover:bg-blue-700'
+                  }`}
                 >
                   Next Generation & Run
                 </button>
                  <button
                    onClick={handleNextGeneration}
-                   className="w-full px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white text-sm rounded transition-colors"
+                   disabled={autoEvolve}
+                   className={`w-full px-4 py-2 text-white text-sm rounded transition-colors ${
+                     autoEvolve 
+                       ? 'bg-gray-500 cursor-not-allowed opacity-50' 
+                       : 'bg-gray-600 hover:bg-gray-700'
+                   }`}
                  >
                    Next Generation Only
                  </button>
                </div>
             ) : (
-              <div className="space-y-2">
-                <div className="flex items-center space-x-2 px-3 py-2 bg-green-900/50 rounded">
-                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                  <span className="text-sm text-green-400">Running</span>
-                </div>
-                <button
-                  onClick={handleCompleteSimulation}
-                  className="w-full px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white text-sm rounded transition-colors"
-                >
-                  Complete Run
-                </button>
-              </div>
+              <button
+                onClick={handleCompleteSimulation}
+                className="w-full px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white text-sm rounded transition-colors"
+              >
+                Complete Run
+              </button>
             )}
 
             {/* Auto Evolve Toggle */}
             <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <span className="text-sm text-white">Auto Evolve</span>
-                {isAutoEvolving && (
-                  <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" title="Auto evolving..."></div>
-                )}
-              </div>
+              <span className="text-sm text-white">Auto Evolve</span>
               <button
                 onClick={() => {
-                  setAutoEvolve(!autoEvolve)
-                  if (autoEvolve) {
-                    // If turning off auto evolve, also reset the auto evolving flag
-                    setIsAutoEvolving(false)
+                  const newAutoEvolve = !autoEvolve
+                  setAutoEvolve(newAutoEvolve)
+                  // If enabling auto evolve and no simulation is running, start one
+                  if (newAutoEvolve && !activeSimulation) {
+                    handleStartSimulation()
                   }
                 }}
                 className={`w-12 h-6 rounded-full transition-colors ${
@@ -297,14 +363,23 @@ export default function Home() {
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-sm text-white">Speed</span>
-                <span className="text-sm text-orange-400">{simulationSpeed}x</span>
+                <span className={`text-sm ${simulationSpeed === 999 ? 'text-red-400 font-bold' : 'text-orange-400'}`}>
+                  {simulationSpeed === 999 ? 'MAX' : `${simulationSpeed}x`}
+                </span>
+              </div>
+              <div className="h-6 flex items-center">
+                {simulationSpeed === 999 && (
+                  <div className="text-xs text-red-300 bg-red-900/30 px-2 py-1 rounded">
+                    ⚡ Render-free mode: Maximum speed simulation
+                  </div>
+                )}
               </div>
               <input
                 type="range"
                 min="1"
-                max="5"
+                max="6"
                 step="1"
-                value={simulationSpeed}
+                value={simulationSpeed === 999 ? 6 : simulationSpeed}
                 onChange={(e) => handleSpeedChange(parseInt(e.target.value))}
                 className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer slider"
                 disabled={!activeSimulation}
@@ -315,6 +390,7 @@ export default function Home() {
                 <span>3x</span>
                 <span>4x</span>
                 <span>5x</span>
+                <span>MAX</span>
               </div>
             </div>
 
